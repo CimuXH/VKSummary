@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="120" viewBox="0 0 400 120">
+  <defs>
+    <!-- 纯单色，无渐变 -->
+  </defs>
+
+  <!-- 图标区域 - 极简线条风格 -->
+  <g transform="translate(30, 20)">
+    <!-- 外框 - 极简矩形 -->
+    <rect x="0" y="0" width="80" height="60" rx="4" fill="none" stroke="#0c0c0c" stroke-width="1.5" opacity="0.9"/>
+
+    <!-- 内部极简播放标记 - 三角形 -->
+    <polygon points="34,22 34,38 50,30" fill="#0c0c0c" opacity="0.9"/>
+
+    <!-- 思维导图节点 - 极简圆点 -->
+    <!-- 左上 -->
+    <circle cx="-6" cy="-6" r="3" fill="none" stroke="#0c0c0c" stroke-width="1" opacity="0.6"/>
+    <line x1="0" y1="0" x2="-6" y2="-6" stroke="#0c0c0c" stroke-width="0.8" opacity="0.4"/>
+
+    <!-- 右上 -->
+    <circle cx="86" cy="-6" r="3" fill="none" stroke="#0c0c0c" stroke-width="1" opacity="0.6"/>
+    <line x1="80" y1="0" x2="86" y2="-6" stroke="#0c0c0c" stroke-width="0.8" opacity="0.4"/>
+
+    <!-- 左下 -->
+    <circle cx="-6" cy="66" r="3" fill="none" stroke="#0c0c0c" stroke-width="1" opacity="0.6"/>
+    <line x1="0" y1="60" x2="-6" y2="66" stroke="#0c0c0c" stroke-width="0.8" opacity="0.4"/>
+
+    <!-- 右下 -->
+    <circle cx="86" cy="66" r="3" fill="none" stroke="#0c0c0c" stroke-width="1" opacity="0.6"/>
+    <line x1="80" y1="60" x2="86" y2="66" stroke="#0c0c0c" stroke-width="0.8" opacity="0.4"/>
+
+    <!-- 正上 -->
+    <circle cx="40" cy="-10" r="2" fill="#0c0c0c" opacity="0.5"/>
+    <line x1="40" y1="0" x2="40" y2="-10" stroke="#0c0c0c" stroke-width="0.8" opacity="0.4"/>
+
+    <!-- 正下 -->
+    <circle cx="40" cy="70" r="2" fill="#0c0c0c" opacity="0.5"/>
+    <line x1="40" y1="60" x2="40" y2="70" stroke="#0c0c0c" stroke-width="0.8" opacity="0.4"/>
+  </g>
+
+  <!-- 品牌文字 - 极简无衬线 -->
+  <g transform="translate(130, 72)">
+    <!-- vk -->
+    <text x="0" y="0" font-family="'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" 
+          font-size="40" font-weight="700" fill="#0c0c0c" letter-spacing="-1">
+      vk
+    </text>
+
+    <!-- summary -->
+    <text x="55" y="0" font-family="'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" 
+          font-size="40" font-weight="200" fill="#0c0c0c" letter-spacing="0.5">
+      summary
+    </text>
+
+    <!-- 极简下划线 -->
+    <line x1="55" y1="8" x2="195" y2="8" stroke="#c9a96e" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
+
+    <!-- AI 标签 - 极简方框 -->
+    <rect x="210" y="-32" width="28" height="16" rx="2" fill="none" stroke="#c9a96e" stroke-width="1" opacity="0.8"/>
+    <text x="224" y="-20" font-family="'Inter', sans-serif" font-size="9" font-weight="600" fill="#c9a96e" text-anchor="middle" opacity="0.9">
+      AI
+    </text>
+  </g>
+</svg>

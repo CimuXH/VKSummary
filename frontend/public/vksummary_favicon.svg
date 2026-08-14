@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="favGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="50%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="favPlay" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="64" height="64" rx="14" fill="#0a0e27"/>
+  <rect x="2" y="2" width="60" height="60" rx="12" fill="none" stroke="url(#favGrad)" stroke-width="2"/>
+  <polygon points="24,20 24,44 44,32" fill="url(#favPlay)"/>
+
+  <!-- 思维导图节点 -->
+  <circle cx="8" cy="8" r="3" fill="#6366f1"/>
+  <line x1="10" y1="10" x2="8" y2="8" stroke="#6366f1" stroke-width="1"/>
+  <circle cx="56" cy="8" r="3" fill="#06b6d4"/>
+  <line x1="54" y1="10" x2="56" y2="8" stroke="#06b6d4" stroke-width="1"/>
+  <circle cx="8" cy="56" r="3" fill="#8b5cf6"/>
+  <line x1="10" y1="54" x2="8" y2="56" stroke="#8b5cf6" stroke-width="1"/>
+  <circle cx="56" cy="56" r="3" fill="#6366f1"/>
+  <line x1="54" y1="54" x2="56" y2="56" stroke="#6366f1" stroke-width="1"/>
+</svg>

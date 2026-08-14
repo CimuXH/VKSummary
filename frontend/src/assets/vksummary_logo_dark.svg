@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="120" viewBox="0 0 400 120">
+  <defs>
+    <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5"/>
+      <stop offset="50%" stop-color="#0891b2"/>
+      <stop offset="100%" stop-color="#7c3aed"/>
+    </linearGradient>
+    <linearGradient id="playGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5"/>
+      <stop offset="100%" stop-color="#0891b2"/>
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(30, 20)">
+    <rect x="0" y="0" width="80" height="60" rx="12" fill="none" stroke="url(#logoGrad)" stroke-width="2.5"/>
+    <rect x="2" y="2" width="76" height="56" rx="10" fill="#f8fafc" opacity="0.3"/>
+    <polygon points="32,18 32,42 52,30" fill="url(#playGrad)"/>
+
+    <circle cx="-8" cy="-8" r="4" fill="#4f46e5"/>
+    <line x1="0" y1="0" x2="-8" y2="-8" stroke="#4f46e5" stroke-width="1"/>
+    <circle cx="88" cy="-8" r="4" fill="#0891b2"/>
+    <line x1="80" y1="0" x2="88" y2="-8" stroke="#0891b2" stroke-width="1"/>
+    <circle cx="-8" cy="68" r="4" fill="#7c3aed"/>
+    <line x1="0" y1="60" x2="-8" y2="68" stroke="#7c3aed" stroke-width="1"/>
+    <circle cx="88" cy="68" r="4" fill="#4f46e5"/>
+    <line x1="80" y1="60" x2="88" y2="68" stroke="#4f46e5" stroke-width="1"/>
+    <circle cx="40" cy="-12" r="3" fill="#0891b2"/>
+    <line x1="40" y1="0" x2="40" y2="-12" stroke="#0891b2" stroke-width="1"/>
+    <circle cx="40" cy="72" r="3" fill="#7c3aed"/>
+    <line x1="40" y1="60" x2="40" y2="72" stroke="#7c3aed" stroke-width="1"/>
+
+    <line x1="-8" y1="-8" x2="88" y2="68" stroke="url(#logoGrad)" stroke-width="0.5" opacity="0.2"/>
+    <line x1="88" y1="-8" x2="-8" y2="68" stroke="url(#logoGrad)" stroke-width="0.5" opacity="0.2"/>
+  </g>
+
+  <g transform="translate(130, 72)">
+    <text x="0" y="0" font-family="'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" 
+          font-size="42" font-weight="800" fill="url(#logoGrad)" letter-spacing="-2">vk</text>
+    <text x="58" y="0" font-family="'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" 
+          font-size="42" font-weight="300" fill="#1e293b" letter-spacing="-1">summary</text>
+    <line x1="58" y1="8" x2="210" y2="8" stroke="url(#logoGrad)" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+    <rect x="220" y="-35" width="32" height="18" rx="4" fill="url(#logoGrad)"/>
+    <text x="236" y="-22" font-family="'Inter', sans-serif" font-size="10" font-weight="700" fill="#ffffff" text-anchor="middle">AI</text>
+  </g>
+</svg>
