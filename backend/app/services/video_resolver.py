@@ -8,6 +8,7 @@ from pathlib import Path
 import httpx
 import logging
 from utils import queue_utils
+from utils import retrieve
 
 logger = logging.getLogger(__name__)
 
@@ -191,6 +192,10 @@ async def _download_all_subtitles(bvid: str, pages: list[dict], bvid_uid: str, f
         with open(file_path, "w", encoding="utf-8") as f:
             f.writelines([r["content"] for r in ok_pages])
 
+        # 把字幕原始文件内容写入到chroma和sqlite的fts5表中，添加到知识库中
+        chunks_len = retrieve.build_hybrid_index_for_file(file_path)
+        logger.info(f"- {bvid_uid}: 的内容已经加入到chroma和sqlite的fts5表中")
+
         # 部分分P失败：无字幕与获取失败分开提示
         if no_sub_pages:
             skipped = "、".join(f"P{r['page']}" for r in no_sub_pages)
@@ -223,6 +228,7 @@ async def _download_all_subtitles(bvid: str, pages: list[dict], bvid_uid: str, f
         # 任务执行失败，删除该任务可能创建的字幕文件
         if os.path.exists(file_path):
             os.remove(file_path)
+            retrieve.delete_hybrid_index_by_bvid_uid(bvid_uid)
 
 
 

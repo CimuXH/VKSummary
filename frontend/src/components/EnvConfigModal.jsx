@@ -102,6 +102,14 @@ export default function EnvConfigModal({ onClose, onSaved }) {
             <p className="text-[11px] text-warm-400 mt-0.5">
               前三个参数用于获取视频信息，后三个参数用于 LLM
             </p>
+            <a
+              href="/how_to_setenv.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block mt-1 text-xs text-blue-600 hover:text-blue-700 hover:underline"
+            >
+              获取环境变量教程 ↗
+            </a>
           </div>
           <button
             onClick={onClose}

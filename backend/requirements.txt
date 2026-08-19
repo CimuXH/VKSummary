@@ -10,3 +10,6 @@ pydantic==2.13.4
 python-dotenv==1.2.2
 Requests==2.34.2
 uvicorn==0.52.3
+chromadb==1.5.9
+sentence-transformers==5.7.0
+jieba==0.42.1

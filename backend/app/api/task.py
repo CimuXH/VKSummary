@@ -9,6 +9,7 @@ from services import video_resolver
 from utils import queue_utils
 import json
 from pathlib import Path
+from utils import retrieve
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +112,8 @@ async def delete(bvid_uid: str):
             os.remove(summary_subtitles_path)
             deleted += 1
         if os.path.exists(subtitles_path):
-            os.remove(subtitles_path)    
+            os.remove(subtitles_path) 
+            retrieve.delete_hybrid_index_by_bvid_uid(bvid_uid) # 从知识库中删除内容  
             deleted += 1
     except Exception as e:
         logger.error(f"删除任务文件失败 {bvid_uid}: {e}", exc_info=True)

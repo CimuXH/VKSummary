@@ -24,4 +24,6 @@ class VideoPagesParam(BaseModel):
     pages: list[dict]
 
 
-    
+# chat中提问
+class QueryParam(BaseModel):
+    query: str    

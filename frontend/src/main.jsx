@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import './index.css'
+import './chat/chatFeature'
 
 // Error boundary to catch runtime errors
 class ErrorBoundary extends React.Component {

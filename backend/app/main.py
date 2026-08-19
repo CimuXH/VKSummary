@@ -2,7 +2,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
-from api import video, settings, task
+from api import video, settings, task, chat
 import logging
 import os
 
@@ -93,6 +93,7 @@ app.add_middleware(
 app.include_router(video.router)
 app.include_router(settings.router)
 app.include_router(task.router)
+app.include_router(chat.router)
 
 # **
 # 状态检查接口
