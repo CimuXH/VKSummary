@@ -158,8 +158,6 @@ extract ──► review ──(通过或达3轮上限)──► 结束
               根据片段和来源流式回答
 ```
 
-新增工具时，在 [chat_tools.py](backend/app/services/chat_tools.py) 的 `TOOLS` 中注册用途、关键词、参数模型和执行函数。每次工具搜索最多返回 3 个候选。
-
 在 Chat 面板点「新建对话」即可切换话题。每个页签独立保存消息，可以在某个页签生成时切到另一个页签。升级后，原有历史会归到「默认对话」。模型读取当前会话的近期消息，SQLite 保留每轮完成的问答原文。
 
 每个新问题只加载一次会话历史快照。默认工作窗口为 32,768 tokens，输出预留 4,096。开场输入超过高水位 24,000 时，按完整问答压缩旧历史，在同一份快照上更新摘要并重新估算，直至输入降到 14,000 以内。若系统规则和当前问题已超过低水位，优先保留这些必要内容；开场必要内容超过高水位时提示分段提问。旧摘要的归档边界按会话保存。
@@ -196,13 +194,3 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File deploy\sandbox\connect.p
 - 运行数据（`backend/data/`）与日志（`backend/app/logs/`）均已加入 `.gitignore`。
 - `backend/data/chat_index/` 存放 Chat 索引数据（Chroma、SQLite、meta 等）。
 - 密钥配置在 `backend/.env`（已 gitignore），请勿提交真实 Cookie 与 API Key。
-
----
-
-## 规划
-
-- [x] LLM Chat：基于所有已下载字幕的全局问答。
-- [ ] 更多平台适配（yt-dlp）
-- [ ] 导出 Markdown / PDF
-- [ ] Docker 部署
-- [ ] Whisper 无字幕兜底
