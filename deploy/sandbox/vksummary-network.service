@@ -1,0 +1,10 @@
+[Unit]
+Description=VKSummary workspace Internet access
+After=docker.service nftables.service
+Requires=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /opt/vksummary-sandbox/network.sh
+RemainAfterExit=yes

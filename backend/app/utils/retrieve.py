@@ -5,7 +5,9 @@ import jieba
 import json
 import re
 import sqlite3
+from contextlib import closing, contextmanager
 from pathlib import Path
+from uuid import uuid4
 
 from chromadb import PersistentClient
 from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
@@ -23,6 +25,23 @@ DB_PATH = CHAT_DIR / "chat.db"
 MODEL_PATH = Path(__file__).parent.parent / "embeding_model" / "BAAI--bge-small-zh-v1.5"
 
 _collection = None
+
+_SEARCH_RUN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]+|[a-z0-9]+")
+_CHUNK_COLUMNS = "id, bvid_uid, bvid, page, part, source_url, content"
+
+
+def _search_groups(text: str):
+    """把连续汉字切成相邻双字，英文和数字保留为词。"""
+    for part in _SEARCH_RUN.findall(text.lower()):
+        if part.isascii():
+            yield [part]
+        elif len(part) >= 2:
+            yield [part[i:i + 2] for i in range(len(part) - 1)]
+
+
+def _search_text(content: str) -> str:
+    # unicode61 会索引这个私用字符，防止完整短语跨标点或空格匹配。
+    return " \ue000 ".join(" ".join(group) for group in _search_groups(content))
 
 
 # 获取集合对象（相当于chroma的表对象，操作表）
@@ -94,34 +113,57 @@ def chunk_subtitle_file(path: Path) -> list[dict]:
     logger.info(f"- {bvid_uid}: 的字幕内容已经分块好了")
     return chunks
 
-# 初始化创建sqlite的fts5表和对话历史表
-def init_sqlite(conn: sqlite3.Connection):
-    """初始化 FTS5 表和对话历史表。"""
+def _create_chunks_fts(conn: sqlite3.Connection, table: str):
     conn.execute(
-        """
-        CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
+        f"""
+        CREATE VIRTUAL TABLE {table} USING fts5(
             id UNINDEXED,
             bvid_uid UNINDEXED,
             bvid UNINDEXED,
             page UNINDEXED,
             part UNINDEXED,
             source_url UNINDEXED,
-            content,
-            tokenize='trigram'
+            content UNINDEXED,
+            search_text,
+            tokenize='unicode61'
         )
         """
     )
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS chat_messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            role TEXT NOT NULL,
-            content TEXT NOT NULL,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-        """
+
+
+def _insert_chunks(conn: sqlite3.Connection, rows, table: str = "chunks_fts"):
+    conn.executemany(
+        f"INSERT INTO {table} ({_CHUNK_COLUMNS}, search_text) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        ((*row, _search_text(row[-1] or "")) for row in rows),
     )
-    conn.commit()
+
+
+def _ensure_chunks_fts(conn: sqlite3.Connection):
+    if conn.execute("SELECT 1 FROM pragma_table_info('chunks_fts') WHERE name = 'search_text'").fetchone():
+        return
+
+    # 拿到写锁后重新检查，避免两个连接同时迁移同一个旧表。
+    with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(chunks_fts)")}
+        if not columns:
+            _create_chunks_fts(conn, "chunks_fts")
+        elif "search_text" not in columns:
+            _create_chunks_fts(conn, "chunks_fts_new")
+            rows = conn.execute(f"SELECT {_CHUNK_COLUMNS} FROM chunks_fts")
+            _insert_chunks(conn, rows, "chunks_fts_new")
+            old_count = conn.execute("SELECT count(*) FROM chunks_fts").fetchone()[0]
+            new_count = conn.execute("SELECT count(*) FROM chunks_fts_new").fetchone()[0]
+            if old_count != new_count:
+                raise RuntimeError("字幕索引迁移后的片段数不一致")
+            conn.execute("DROP TABLE chunks_fts")
+            conn.execute("ALTER TABLE chunks_fts_new RENAME TO chunks_fts")
+
+
+def init_sqlite(conn: sqlite3.Connection):
+    """初始化字幕关键词索引和对话历史表。"""
+    _ensure_chunks_fts(conn)
+    _ensure_chat_tables(conn)
 
 
 # 从 chroma 和 sqlite的fts5 中删除该任务字幕内容
@@ -134,7 +176,7 @@ def delete_hybrid_index_by_bvid_uid(bvid_uid: str):
         logger.error(f"- {bvid_uid}: 的内容从Chroma中删除失败！", exc_info=True)
 
     CHAT_DIR.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(DB_PATH) as conn:
+    with closing(sqlite3.connect(DB_PATH)) as conn:
         init_sqlite(conn)
         conn.execute("DELETE FROM chunks_fts WHERE bvid_uid = ?", (bvid_uid,))
         conn.commit()
@@ -169,26 +211,12 @@ def build_hybrid_index_for_file(path: Path) -> int:
 
     # 写入 SQLite FTS5
     CHAT_DIR.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(DB_PATH) as conn:
+    with closing(sqlite3.connect(DB_PATH)) as conn:
         init_sqlite(conn)
-        conn.executemany(
-            """
-            INSERT INTO chunks_fts
-                (id, bvid_uid, bvid, page, part, source_url, content)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            [
-                (
-                    c["id"],
-                    c["bvid_uid"],
-                    c["bvid"],
-                    c["page"],
-                    c["part"],
-                    c["source_url"],
-                    c["content"],
-                )
-                for c in chunks
-            ],
+        _insert_chunks(
+            conn,
+            ((c["id"], c["bvid_uid"], c["bvid"], c["page"], c["part"],
+              c["source_url"], c["content"]) for c in chunks),
         )
         conn.commit()
 
@@ -227,36 +255,52 @@ def chroma_search(question: str, top_k: int = 10) -> list[dict]:
 
 # 获取sqlite的fts5的bm25检索内容
 def bm25_search(question: str, top_k: int = 10) -> list[dict]:
-    """从 SQLite FTS5 检索关键词匹配的字幕片段。"""
-    # 使用结巴中文分词，拆出关键词并去掉常见语气词
+    """先查完整短语，再用单个索引词补足候选。"""
     _STOPWORDS = {"的", "了", "是", "在", "有", "和", "就", "不", "都", "一", "一个", "上", "也", "很", "到", "说", "要", "去", "你", "会", "着", "没有", "看", "好", "自己", "这", "那", "什么", "怎么", "如何", "为什么", "哪些", "哪个", "吗", "呢", "啊", "吧", "与", "及", "或", "等", "可以", "应该", "请问", "一下"}
-    words = [
-        w.strip()
-        for w in jieba.cut(question)
-        if w.strip() and len(w.strip()) > 1 and w.strip() not in _STOPWORDS
+    words = [piece.strip() for piece in jieba.cut(question)]
+    groups = [
+        group for word in words if len(word) > 1 and word not in _STOPWORDS
+        for group in _search_groups(word)
     ]
-    terms = list(dict.fromkeys(words))
-    if not terms:
+
+    # 保留短查询中的完整术语，例如 jieba 可能把「缓存雪崩」拆成两词。
+    short = question.strip(" \t\r\n?!？！。")
+    whole = []
+    if 2 <= len(short) <= 12 and short not in _STOPWORDS and _SEARCH_RUN.fullmatch(short.lower()):
+        whole = next(_search_groups(short), [])
+    phrases = [" ".join(whole)] if len(whole) > 1 else [
+        " ".join(group) for group in groups if len(group) > 1
+    ]
+    terms = [token for group in groups for token in group]
+    if len(whole) == 1 or not _STOPWORDS.intersection(words):
+        terms.extend(whole)
+    if top_k <= 0 or not terms:
         return []
 
-    match_expr = " OR ".join(f'"{t}"' for t in terms)
-
     CHAT_DIR.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(DB_PATH) as conn:
+    rows = {}
+    with closing(sqlite3.connect(DB_PATH)) as conn:
         init_sqlite(conn)
         try:
-            rows = conn.execute(
-                """
-                SELECT id, bvid_uid, bvid, page, part, source_url, content,
-                       bm25(chunks_fts) AS bm25_score
-                FROM chunks_fts
-                WHERE chunks_fts MATCH ?
-                ORDER BY bm25_score
-                LIMIT ?
-                """,
-                (match_expr, top_k),
-            ).fetchall()
+            for candidates in (phrases, terms):
+                if not candidates:
+                    continue
+                match_expr = " OR ".join(f'"{term}"' for term in dict.fromkeys(candidates))
+                for row in conn.execute(
+                    f"""
+                    SELECT {_CHUNK_COLUMNS}, bm25(chunks_fts) AS score
+                    FROM chunks_fts
+                    WHERE chunks_fts MATCH ?
+                    ORDER BY score, rowid
+                    LIMIT ?
+                    """,
+                    (match_expr, top_k),
+                ):
+                    rows.setdefault(row[0], row)
+                if len(rows) >= top_k:
+                    break
         except sqlite3.OperationalError:
+            logger.warning("字幕关键词检索失败", exc_info=True)
             return []
 
     return [
@@ -270,7 +314,7 @@ def bm25_search(question: str, top_k: int = 10) -> list[dict]:
             "source_url": r[5],
             "score": r[7],
         }
-        for r in rows
+        for r in list(rows.values())[:top_k]
     ]
 
 
@@ -304,65 +348,143 @@ def hybrid_search(question: str, top_k: int = 5, chroma_weight: float = 0.7, bm2
     return results
 
 # **************************对话历史消息相关数据库存储********************************
-# 保存一条对话消息
-def save_chat_message(role: str, content: str):
-    """保存一条对话消息。role 为 user 或 assistant。"""
-    CHAT_DIR.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(DB_PATH) as conn:
-        init_sqlite(conn)
-        conn.execute(
-            "INSERT INTO chat_messages (role, content) VALUES (?, ?)",
-            (role, content),
+def _ensure_chat_tables(conn: sqlite3.Connection):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS chat_summary_archive (
+            thread_id TEXT PRIMARY KEY, through_id INTEGER NOT NULL
         )
-        conn.commit()
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS chat_summaries (
+            thread_id TEXT NOT NULL, first_id INTEGER NOT NULL,
+            last_id INTEGER NOT NULL, content TEXT NOT NULL,
+            PRIMARY KEY (thread_id, first_id)
+        )
+    """)
+    if conn.execute("SELECT 1 FROM pragma_table_info('chat_messages') WHERE name = 'thread_id'").fetchone():
+        return
 
-
-# 保存一轮问答，并只保留最近100条
-def save_chat_messages(user_content: str, assistant_content: str, keep: int = 100):
-    """保存用户问题和助手回答，并删除更早的历史，只保留最近 keep 条。"""
-    CHAT_DIR.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(DB_PATH) as conn:
-        init_sqlite(conn)
-        conn.execute(
-            "INSERT INTO chat_messages (role, content) VALUES (?, ?)",
-            ("user", user_content),
-        )
-        conn.execute(
-            "INSERT INTO chat_messages (role, content) VALUES (?, ?)",
-            ("assistant", assistant_content),
-        )
+    # 迁移和新表创建用同一个事务；旧消息通过列默认值归入「默认对话」。
+    with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute("CREATE TABLE IF NOT EXISTS chat_threads (id TEXT PRIMARY KEY NOT NULL)")
+        conn.execute("INSERT OR IGNORE INTO chat_threads (id) VALUES ('default')")
         conn.execute(
             """
-            DELETE FROM chat_messages
-            WHERE id NOT IN (
-                SELECT id FROM chat_messages
-                ORDER BY id DESC
-                LIMIT ?
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                thread_id TEXT NOT NULL DEFAULT 'default'
             )
-            """,
-            (keep,),
+            """
         )
-        conn.commit()
+        # 获取写锁后复查，防止两个首次请求重复加列。
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(chat_messages)")}
+        if "thread_id" not in columns:
+            conn.execute("ALTER TABLE chat_messages ADD COLUMN thread_id TEXT NOT NULL DEFAULT 'default'")
+        conn.execute("CREATE INDEX IF NOT EXISTS chat_messages_thread ON chat_messages (thread_id, id)")
 
 
-# 获取最近对话历史
-def get_recent_messages(limit: int = 10) -> list[dict]:
-    """获取最近 limit 条对话，按时间正序返回。"""
+@contextmanager
+def _chat_db():
+    """打开聊天数据库。读取会话时无需打开字幕索引。"""
     CHAT_DIR.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(DB_PATH) as conn:
-        init_sqlite(conn)
+    with closing(sqlite3.connect(DB_PATH)) as conn:
+        _ensure_chat_tables(conn)
+        yield conn
+
+
+def list_chat_threads() -> list[dict]:
+    with _chat_db() as conn:
+        return [{"id": row[0]} for row in conn.execute("SELECT id FROM chat_threads ORDER BY rowid")]
+
+
+def create_chat_thread() -> dict:
+    thread_id = uuid4().hex
+    with _chat_db() as conn, conn:
+        conn.execute("INSERT INTO chat_threads (id) VALUES (?)", (thread_id,))
+    return {"id": thread_id}
+
+
+def chat_thread_exists(thread_id: str) -> bool:
+    with _chat_db() as conn:
+        return conn.execute("SELECT 1 FROM chat_threads WHERE id = ?", (thread_id,)).fetchone() is not None
+
+
+def save_chat_messages(user_content: str, assistant_content: str, *, thread_id: str = "default"):
+    """把一轮完整的问答一起保存到同一会话。"""
+    with _chat_db() as conn, conn:
+        conn.executemany(
+            "INSERT INTO chat_messages (thread_id, role, content) VALUES (?, ?, ?)",
+            [(thread_id, "user", user_content), (thread_id, "assistant", assistant_content)],
+        )
+
+
+def get_recent_messages(limit: int = 10, *, thread_id: str = "default") -> list[dict]:
+    """按正序返回指定会话的近期消息。limit 只限制读取条数。"""
+    with _chat_db() as conn:
         rows = conn.execute(
-            "SELECT role, content FROM chat_messages ORDER BY id DESC LIMIT ?",
-            (limit,),
+            "SELECT role, content FROM chat_messages WHERE thread_id = ? ORDER BY id DESC LIMIT ?",
+            (thread_id, limit),
         ).fetchall()
     return [{"role": r[0], "content": r[1]} for r in reversed(rows)]
 
 
-# 清空全部对话历史
-def clear_chat_messages():
-    """清空对话历史表。"""
-    CHAT_DIR.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(DB_PATH) as conn:
-        init_sqlite(conn)
-        conn.execute("DELETE FROM chat_messages")
-        conn.commit()
+def load_chat_context(thread_id: str, input_budget: int):
+    """同一快照读取窗口内的摘要，以及尚未被任何摘要覆盖的原文。"""
+    with _chat_db() as conn:
+        conn.row_factory = sqlite3.Row
+        conn.execute("BEGIN")
+        summaries = []
+        chars = 0
+        for summary in conn.execute(
+            "SELECT first_id, last_id, content FROM chat_summaries WHERE thread_id = ? AND first_id > "
+            "COALESCE((SELECT through_id FROM chat_summary_archive WHERE thread_id = ?), 0) "
+            "ORDER BY first_id DESC", (thread_id, thread_id),
+        ):
+            summaries.append(dict(summary))
+            chars += len(summary["content"]) + 1
+            if chars >= 3 * input_budget:  # 与本地估算一致，更多的摘要肯定放不下。
+                break
+        rows = conn.execute(
+            "SELECT id, role, content FROM chat_messages WHERE thread_id = ? AND id > COALESCE("
+            " (SELECT last_id FROM chat_summaries WHERE thread_id = ? ORDER BY first_id DESC LIMIT 1), 0)"
+            " ORDER BY id", (thread_id, thread_id),
+        ).fetchall()
+    return summaries, list(map(dict, rows))
+
+
+def archive_chat_summaries(thread_id: str, through_id: int):
+    # 只移动默认加载的边界。摘要和原文都保留，并发请求也不会把边界往回移。
+    with _chat_db() as conn, conn:
+        conn.execute(
+            "INSERT INTO chat_summary_archive (thread_id, through_id) VALUES (?, ?) "
+            "ON CONFLICT(thread_id) DO UPDATE SET through_id = max(through_id, excluded.through_id)",
+            (thread_id, through_id),
+        )
+
+
+def save_chat_summary(thread_id: str, first_id: int, last_id: int, content: str) -> bool:
+    # 同会话并发压缩时，只有一个请求能写入这段原文；另一个重新读取已保存的结果。
+    with _chat_db() as conn, conn:
+        return conn.execute(
+            "INSERT INTO chat_summaries (thread_id, first_id, last_id, content) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(thread_id, first_id) DO NOTHING",
+            (thread_id, first_id, last_id, content),
+        ).rowcount == 1
+
+
+def read_chat_messages(ids: list[int], offset: int, *, thread_id: str) -> dict:
+    # 由后端限定会话；超长原文可从 next_offset 继续读，避免一次检索填满窗口。
+    marks = ",".join("?" for _ in ids)
+    with _chat_db() as conn:
+        rows = conn.execute(
+            f"SELECT id, role, substr(content, ?, 2000), length(content) FROM chat_messages "
+            f"WHERE thread_id = ? AND id IN ({marks}) ORDER BY id",
+            (offset + 1, thread_id, *ids),
+        ).fetchall()
+    return {"messages": [{"id": mid, "role": role, "content": part, "offset": offset,
+                          "next_offset": offset + len(part) if offset + len(part) < size else None}
+                         for mid, role, part, size in rows]}

@@ -26,4 +26,5 @@ class VideoPagesParam(BaseModel):
 
 # chat中提问
 class QueryParam(BaseModel):
-    query: str    
+    query: str
+    thread_id: str = "default"

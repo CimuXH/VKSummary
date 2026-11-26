@@ -1,0 +1,20 @@
+[Unit]
+Description=VKSummary chat sandbox runner
+After=docker.service vksummary-network.service
+Requires=docker.service vksummary-network.service
+
+[Service]
+DynamicUser=yes
+SupplementaryGroups=docker
+WorkingDirectory=/opt/vksummary-sandbox
+Environment=PYTHONPATH=/opt/vksummary-sandbox/deps
+LoadCredential=runner-token:/opt/vksummary-sandbox/runner.token
+StateDirectory=vksummary-sandbox
+ExecStart=/usr/bin/python3 -m uvicorn runner:app --host 127.0.0.1 --port 15051 --workers 1
+NoNewPrivileges=yes
+PrivateTmp=yes
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
